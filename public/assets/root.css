@@ -1,0 +1,44 @@
+:root {
+    --main-bg: #102840;
+    --green: #00e054;
+    --blue: #40bcf4;
+    --orange: #ff8000;
+    --card-color: #181B20;
+}
+
+/* Regular styles */
+@font-face {
+    font-family: 'Graphik';
+    src: url('GraphikLight.otf') format('opentype');
+    font-weight: 300;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Graphik';
+    src: url('GraphikBold.otf') format('opentype');
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Graphik';
+    src: url('GraphikBlack.otf') format('opentype');
+    font-weight: bolder;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Graphik';
+    src: url('GraphikRegular.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+/* Italic styles */
+@font-face {
+    font-family: 'Graphik';
+    src: url('GraphikRegularItalic.otf') format('opentype');
+    font-weight: normal;
+    font-style: italic;
+}
