@@ -44,7 +44,7 @@ app.post("/result", async (req, res) => {
     await page.goto(`${reveiwLink}`, { waitUntil: "domcontentloaded" });
 
     const targetSelector = "section.section.col-17.col-main.overflow";
-    await page.waitForSelector(targetSelector, { timeout: 120000 });
+    await page.waitForSelector(targetSelector);
 
     async function getTextContent(page, selector) {
       const text = await page.evaluate((sel) => {
