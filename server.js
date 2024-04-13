@@ -42,10 +42,10 @@ app.post("/result", async (req, res) => {
     });
 
     const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(120_000);
-    await page.goto(`${reveiwLink}`, {
-      waitUntil: "networkidle0",
-    });
+    await page.goto(`${reveiwLink}`, { waitUntil: "domcontentloaded" });
+
+    const targetSelector = "section.section.col-17.col-main.overflow";
+    await page.waitForSelector(targetSelector, { timeout: 120000 });
 
     async function getTextContent(page, selector) {
       const text = await page.evaluate((sel) => {
