@@ -10,7 +10,8 @@ RUN npm ci
 COPY . .
 
 
-RUN apt-get update && apt-get install -y chromium-browser
+# RUN apt-get update && apt-get install -y chromium-browser
+RUN apt-get install chromium-browser
 # Install required packages
 # RUN apt-get update && apt-get install -y dbus
 # RUN dbus-uuidgen --ensure=/etc/machine-id
