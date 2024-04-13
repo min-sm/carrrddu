@@ -27,21 +27,14 @@ app.post("/result", async (req, res) => {
 
   try {
     const browser = await puppeteer.launch({
-      args: [
-        "--disable-setuid-sandbox",
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--single-process",
-        "--no-zygote",
-      ],
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
       headless: false,
       defaultViewport: false,
-      userDataDir: "./tmp",
     });
 
     const page = await browser.newPage();
-    await page.setDefaultNavigationTimeout(60000);
+    await page.setDefaultNavigationTimeout(120_000);
     await page.goto(`${reveiwLink}`, {
       waitUntil: "load",
     });
