@@ -37,7 +37,7 @@ app.post("/result", async (req, res) => {
         process.env.NODE_ENV === "production"
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
-      // headless: false,
+      headless: false,
       defaultViewport: false,
       userDataDir: "./tmp",
     });
