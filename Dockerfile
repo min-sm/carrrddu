@@ -9,4 +9,9 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+
+# Install required packages
+RUN apt-get update && apt-get install -y dbus
+RUN dbus-uuidgen --ensure=/etc/machine-id
+
 CMD [ "./node_modules/.bin/nodemon", "server.js" ]
