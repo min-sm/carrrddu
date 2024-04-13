@@ -41,7 +41,7 @@ app.post("/result", async (req, res) => {
     });
 
     const page = await browser.newPage();
-    // await page.setDefaultNavigationTimeout(120_000);
+    await page.setDefaultNavigationTimeout(120_000);
     await page.goto(`${reveiwLink}`, {
       waitUntil: "load",
     });
