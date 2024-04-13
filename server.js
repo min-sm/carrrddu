@@ -35,7 +35,7 @@ app.post("/result", async (req, res) => {
         "--no-zygote",
       ],
       executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      headless: true,
+      headless: false,
       defaultViewport: false,
       userDataDir: "./tmp",
     });
