@@ -38,12 +38,13 @@ app.post("/result", async (req, res) => {
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
       headless: true,
+      timeout: 0,
     });
 
     const page = await browser.newPage();
     await page.setDefaultNavigationTimeout(120_000);
     await page.goto(`${reveiwLink}`, {
-      waitUntil: "load",
+      waitUntil: "networkidle0",
     });
 
     async function getTextContent(page, selector) {
