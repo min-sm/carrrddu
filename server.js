@@ -38,7 +38,6 @@ app.post("/result", async (req, res) => {
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
       headless: true,
-      timeout: 0,
     });
 
     const page = await browser.newPage();
