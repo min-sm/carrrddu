@@ -18,8 +18,6 @@ app.use(express.json());
 
 app.set("view engine", "ejs");
 
-fs.chmodSync("./public/assets", 0o755);
-
 app.get("/", (req, res) => {
   res.render("index");
 });
@@ -44,8 +42,11 @@ app.post("/result", async (req, res) => {
 
     const page = await browser.newPage();
     await page.goto(`${reveiwLink}`, { waitUntil: "domcontentloaded" });
+    // await page.goto(`${reveiwLink}`, { waitUntil: "load" });
 
-    const targetSelector = "section.section.col-17.col-main.overflow";
+    const targetSelector = `img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]`;
+    // const targetSelector =
+    //   "section.poster-list.-p150.el.col.viewing-poster-container";
     await page.waitForSelector(targetSelector);
 
     async function getTextContent(page, selector) {
@@ -101,6 +102,7 @@ app.post("/result", async (req, res) => {
       let imgElement = document.querySelector(`img[alt="${reviewerName}"]`);
       return imgElement ? imgElement.src.trim() : null;
     }, reviewerName);
+    console.log(`reviewer: ${reviewerPicSrc}\nposter: ${posterSrc}`);
 
     let newDimensions = "-0-1000-0-1500-";
     let replacedUrl = posterSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
@@ -110,6 +112,8 @@ app.post("/result", async (req, res) => {
     replacedUrl = reviewerPicSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
     let reviewerPicBetterSrc = replacedUrl;
 
+    console.log(posterBetterSrc);
+    console.log(reviewerPicBetterSrc);
     const renderedHTML = await new Promise((resolve, reject) => {
       res.render(
         "result1",
@@ -138,17 +142,18 @@ app.post("/result", async (req, res) => {
     });
 
     // Create a new page and set its content to the rendered HTML
-    const screenshotPage = await browser.newPage();
-    await screenshotPage.setContent(renderedHTML);
+    // const screenshotPage = await browser.newPage();
+    // await screenshotPage.setContent(renderedHTML);
 
     // Capture the screenshot of the desired element
-    const element = await screenshotPage.$("#htmlContent");
-    await element.screenshot({ path: "./public/assets/card.png" });
+    // const element = await screenshotPage.$("#htmlContent");
+    // await element.screenshot({ path: "./public/assets/card.png" });
 
     // await browser.close();
 
     res.render("result", {
       data: {
+        renderedHTML,
         movieName,
         reviewerName,
         review,
@@ -170,13 +175,54 @@ app.post("/result", async (req, res) => {
   }
 });
 
-app.get("/download", (req, res) => {
-  const imagePath = path.join(__dirname, "public", "assets", "card.png");
-  res.setHeader("Content-Disposition", "attachment; filename=card.png");
-  res.setHeader("Content-Type", "image/jpeg");
+// app.post("/download", (req, res) => {
+//   const imagePath = path.join(__dirname, "public", "assets", "card.png");
+//   res.setHeader("Content-Disposition", "attachment; filename=card.png");
+//   res.setHeader("Content-Type", "image/jpeg");
 
-  // Send the file
-  res.sendFile(imagePath);
+//   // Send the file
+//   res.sendFile(imagePath);
+// });
+
+app.post("/download", async (req, res) => {
+  const renderedHTML = req.body.renderedHTML; // Assuming you send it in the request body
+
+  try {
+    const browser = await puppeteer.launch({
+      args: [
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
+        "--single-process",
+        "--no-zygote",
+      ],
+      executablePath:
+        process.env.NODE_ENV === "production"
+          ? process.env.PUPPETEER_EXECUTABLE_PATH
+          : puppeteer.executablePath(),
+      headless: true,
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(renderedHTML);
+
+    // Capture the screenshot of the desired element
+    const element = await page.$("#htmlContent");
+    const screenshotBuffer = await element.screenshot();
+
+    await browser.close();
+
+    // Set the appropriate headers for image download
+    res.setHeader("Content-Disposition", "attachment; filename=card.png");
+    res.setHeader("Content-Type", "image/png");
+
+    // Send the screenshot buffer as a response
+    res.send(screenshotBuffer);
+  } catch (err) {
+    console.error(err);
+    res
+      .status(500)
+      .json({ error: "An error occurred while generating the screenshot" });
+  }
 });
 
 app.listen(PORT, () => {
