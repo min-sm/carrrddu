@@ -18,6 +18,8 @@ app.use(express.json());
 
 app.set("view engine", "ejs");
 
+fs.chmodSync("./public/assets", 0o755);
+
 app.get("/", (req, res) => {
   res.render("index");
 });
