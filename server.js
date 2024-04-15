@@ -43,11 +43,8 @@ app.post("/result", async (req, res) => {
 
     const page = await browser.newPage();
     await page.goto(`${reveiwLink}`, { waitUntil: "domcontentloaded" });
-    // await page.goto(`${reveiwLink}`, { waitUntil: "load" });
 
     const targetSelector = `img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]`;
-    // const targetSelector =
-    //   "section.poster-list.-p150.el.col.viewing-poster-container";
     await page.waitForSelector(targetSelector);
 
     async function getTextContent(page, selector) {
