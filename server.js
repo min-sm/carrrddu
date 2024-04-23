@@ -8,7 +8,7 @@ const https = require("https");
 const dotenv = require("dotenv");
 dotenv.config();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 app.use(express.static("public"));
 app.use(express.static("src"));
@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 });
 
 app.post("/result", async (req, res) => {
-  const reveiwLink = req.body.review_link;
+  const reviewLink = req.body.review_link;
 
   try {
     const browser = await puppeteer.launch({
@@ -39,10 +39,11 @@ app.post("/result", async (req, res) => {
           : puppeteer.executablePath(),
       headless: true,
       timeout: 60000,
+      defaultViewport: null,
     });
 
     const page = await browser.newPage();
-    await page.goto(`${reveiwLink}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`${reviewLink}`, { waitUntil: "domcontentloaded" });
 
     const targetSelector = `img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]`;
     await page.waitForSelector(targetSelector);
@@ -139,16 +140,6 @@ app.post("/result", async (req, res) => {
       );
     });
 
-    // Create a new page and set its content to the rendered HTML
-    // const screenshotPage = await browser.newPage();
-    // await screenshotPage.setContent(renderedHTML);
-
-    // Capture the screenshot of the desired element
-    // const element = await screenshotPage.$("#htmlContent");
-    // await element.screenshot({ path: "./public/assets/card.png" });
-
-    // await browser.close();
-
     res.render("result", {
       data: {
         renderedHTML,
@@ -173,15 +164,6 @@ app.post("/result", async (req, res) => {
   }
 });
 
-// app.post("/download", (req, res) => {
-//   const imagePath = path.join(__dirname, "public", "assets", "card.png");
-//   res.setHeader("Content-Disposition", "attachment; filename=card.png");
-//   res.setHeader("Content-Type", "image/jpeg");
-
-//   // Send the file
-//   res.sendFile(imagePath);
-// });
-
 app.post("/download", async (req, res) => {
   const renderedHTML = req.body.renderedHTML; // Assuming you send it in the request body
 
@@ -198,6 +180,7 @@ app.post("/download", async (req, res) => {
           ? process.env.PUPPETEER_EXECUTABLE_PATH
           : puppeteer.executablePath(),
       headless: true,
+      defaultViewport: null,
     });
 
     const page = await browser.newPage();
