@@ -90,7 +90,11 @@ app.post("/result", async (req, res) => {
     let watchedDate = await getTextContent(page, `p.view-date.date-links`);
     watchedDate = watchedDate.replace(/\s+/g, " ");
 
-    const likes = await getTextContent(page, `p.like-link-target`);
+    const likes =
+      (await getTextContent(page, `p.like-link-target`)) ??
+      (await getTextContent(page, `a[href="${reviewLink.slice(22)}/likes/"]`));
+    console.log(typeof likes);
+    console.log(`Likes: a${likes}a`);
 
     const posterSrc = await page.evaluate((movieName) => {
       let imgElement = document.querySelector(`img[alt="${movieName}"]`);
@@ -111,8 +115,6 @@ app.post("/result", async (req, res) => {
     replacedUrl = reviewerPicSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
     let reviewerPicBetterSrc = replacedUrl;
 
-    console.log(posterBetterSrc);
-    console.log(reviewerPicBetterSrc);
     const renderedHTML = await new Promise((resolve, reject) => {
       res.render(
         "result1",
