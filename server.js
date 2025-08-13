@@ -6,9 +6,14 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const dotenv = require("dotenv");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
+
+// Initialize Gemini AI -- THIS IS NEW
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 app.use(express.static("public"));
 app.use(express.static("src"));
@@ -25,8 +30,10 @@ app.get("/", (req, res) => {
 app.post("/result", async (req, res) => {
   const reviewLink = req.body.review_link;
 
+  let browser; // Define browser outside the try block to close it in case of an AI error
+
   try {
-    const browser = await puppeteer.launch({
+    browser = await puppeteer.launch({
       args: [
         "--disable-setuid-sandbox",
         "--no-sandbox",
@@ -60,124 +67,163 @@ app.post("/result", async (req, res) => {
     }
 
     const hasSpoilers = async (page) => {
-      const hasSpoiler = await page.evaluate(
+      return page.evaluate(
         () =>
           document.querySelector(`div.review>div.contains-spoilers`) !== null
       );
-      return hasSpoiler;
     };
 
-    const hasSpoiler = await hasSpoilers(page);
+    // --- Let's put all scraped data into one object for easier handling ---
+    const scrapedData = {
+      review:
+        (await getTextContent(page, `div.review div > h3 ~ div`)) ??
+        (await getTextContent(
+          page,
+          `div.review div > p.prior-review-link ~ div`
+        )),
+      reviewerName: await getTextContent(page, `span#msm`),
+      // reviewerName: await getTextContent(page, `span[itemprop='name']`),
+      movieName: await getTextContent(page, `h2.name.-primary.prettify>a`),
+      movieYear: await getTextContent(page, `span.releasedate>a`),
+      rating: await getTextContent(page, `span.rating.rating-large`),
+      watchedDate:
+        (await getTextContent(page, `p.view-date.date-links`))?.replace(
+          /\s+/g,
+          " "
+        ) ?? null,
+      likes:
+        (await getTextContent(page, `p.like-link-target`)) ??
+        (await getTextContent(
+          page,
+          `a[href="${reviewLink.slice(22)}/likes/"]`
+        )),
+      hasSpoiler: await hasSpoilers(page),
+      posterSrc: await page.evaluate(() => {
+        const img = document.querySelector(
+          'img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]'
+        );
+        return img ? img.src.trim() : null;
+      }),
+      reviewerPicSrc: null, // We'll get this after getting reviewerName
+    };
 
-    let review =
-      (await getTextContent(page, `div.review div > h3 ~ div`)) ??
-      (await getTextContent(
-        page,
-        `div.review div > p.prior-review-link ~ div`
-      ));
-
-    const reviewerName = await getTextContent(page, `span[itemprop='name']`);
-
-    const movieName = await getTextContent(page, `h2.name.-primary.prettify>a`);
-    // const movieName = await getTextContent(page, `span.film-title-wrapper>a`);
-
-    const movieYear = await getTextContent(
-      page,
-      `span.releasedate>a`
-      // `span.film-title-wrapper>small>a`
-    );
-
-    const rating = await getTextContent(page, `span.rating.rating-large`);
-
-    let watchedDate = await getTextContent(page, `p.view-date.date-links`);
-    watchedDate = watchedDate.replace(/\s+/g, " ");
-
-    const likes =
-      (await getTextContent(page, `p.like-link-target`)) ??
-      (await getTextContent(page, `a[href="${reviewLink.slice(22)}/likes/"]`));
-    console.log(typeof likes);
-    console.log(`Likes: a${likes}a`);
-
-    // Replace the existing posterSrc code with:
-    const posterSrc = await page.evaluate(() => {
-      // Use the same selector we already confirmed exists
-      const img = document.querySelector(
-        'img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]'
-      );
-      return img ? img.src.trim() : null;
-    });
-
-    const reviewerPicSrc = await page.evaluate((reviewerName) => {
+    scrapedData.reviewerPicSrc = await page.evaluate((reviewerName) => {
+      if (!reviewerName) return null;
       let imgElement = document.querySelector(`img[alt="${reviewerName}"]`);
       return imgElement ? imgElement.src.trim() : null;
-    }, reviewerName);
-    console.log(`reviewer: ${reviewerPicSrc}\nposter: ${posterSrc}`);
+    }, scrapedData.reviewerName);
 
-    let newDimensions = "-0-1000-0-1500-";
-    let replacedUrl = posterSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
-    // Handle potential null values for images
-    let posterBetterSrc = posterSrc;
-    let reviewerPicBetterSrc = reviewerPicSrc;
+    // ##################################################################
+    // ## START OF NEW GEMINI AI INTEGRATION LOGIC ##
+    // ##################################################################
 
-    if (posterSrc) {
-      const newDimensions = "-0-1000-0-1500-";
-      posterBetterSrc = posterSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
+    // Check if any of the crucial values are null
+    const missingFields = Object.keys(scrapedData).filter(
+      (key) => scrapedData[key] === null || scrapedData[key] === undefined
+    );
+
+    if (missingFields.length > 0) {
+      console.log(
+        "Scraping failed for some fields. Asking Gemini for help...",
+        missingFields
+      );
+
+      // 1. Get the full HTML content of the page
+      const htmlContent = await page.content();
+
+      // 2. Create a detailed prompt for Gemini
+      const prompt = `
+        You are an expert web page analyst. From the following HTML content of a Letterboxd review page, please extract the specified missing information.
+        The fields I need are: ${missingFields.join(", ")}.
+
+        Here are details for each field:
+        - movieName: The title of the film being reviewed.
+        - reviewerName: The name of the person who wrote the review.
+        - review: The main text content of the review itself, in HTML format.
+        - movieYear: The release year of the film.
+        - rating: The star rating given. For example, "★★★★½".
+        - watchedDate: The date the film was marked as watched. For example, "Watched on Aug 12, 2025".
+        - likes: The number of likes the review has, as text. For example, "1,234 likes".
+        - posterSrc: The full URL for the movie poster image.
+        - reviewerPicSrc: The full URL for the reviewer's profile picture.
+
+        Please return the data as a single, minified JSON object. Do not include any text, explanations, or markdown formatting like \`\`\`json.
+        If a value cannot be found in the HTML, return null for that key.
+
+        Example response format: {"movieName": "Dune: Part Two", "reviewerName": "John Doe", "review": "<p>Amazing film!</p>"}
+
+        HTML Content:
+        ${htmlContent}
+      `;
+
+      try {
+        // 3. Call the Gemini API
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        // 4. Parse the JSON response from the AI
+        const aiData = JSON.parse(text);
+        console.log("Gemini responded with:", aiData);
+
+        // 5. Merge the AI's data with our scraped data
+        for (const key of missingFields) {
+          if (aiData[key]) {
+            // If AI found a value
+            scrapedData[key] = aiData[key];
+            console.log(`Updated '${key}' with AI data.`);
+          }
+        }
+      } catch (aiError) {
+        console.error("An error occurred with the Gemini API call:", aiError);
+        // You can decide how to handle this - maybe proceed with null data or show an error
+      }
     }
 
-    if (reviewerPicSrc) {
-      const newDimensions = "-0-1000-0-1000-";
-      reviewerPicBetterSrc = reviewerPicSrc.replace(
+    // ##################################################################
+    // ## END OF NEW GEMINI AI INTEGRATION LOGIC ##
+    // ##################################################################
+
+    // --- Now we process the final data (which may have been filled by AI) ---
+
+    // Handle potential null values and generate better image URLs
+    let posterBetterSrc = scrapedData.posterSrc;
+    if (posterBetterSrc) {
+      const newDimensions = "-0-1000-0-1500-";
+      posterBetterSrc = posterBetterSrc.replace(
         /-0-(\d+)-0-(\d+)-/,
         newDimensions
       );
     }
 
-    // If the values (movieName, reviewerName, review, movieYear, rating, watchedDate, likes, hasSpoiler, posterBetterSrc, reviewerPicBetterSrc) are null, we will use gemini ai. send the webpage and ask the AI to return me those values
-
-
-
-    const renderedHTML = await new Promise((resolve, reject) => {
-      res.render(
-        "result1",
-        {
-          data: {
-            movieName,
-            reviewerName,
-            review,
-            movieYear,
-            rating,
-            watchedDate,
-            likes,
-            hasSpoiler,
-            posterBetterSrc,
-            reviewerPicBetterSrc,
-          },
-        },
-        (err, html) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(html);
-          }
-        }
+    let reviewerPicBetterSrc = scrapedData.reviewerPicSrc;
+    if (reviewerPicBetterSrc) {
+      const newDimensions = "-0-1000-0-1000-";
+      reviewerPicBetterSrc = reviewerPicBetterSrc.replace(
+        /-0-(\d+)-0-(\d+)-/,
+        newDimensions
       );
+    }
+
+    // Update the final data object with better image sources
+    scrapedData.posterBetterSrc = posterBetterSrc;
+    scrapedData.reviewerPicBetterSrc = reviewerPicBetterSrc;
+
+    // Render the final result
+    const renderedHTML = await new Promise((resolve, reject) => {
+      res.render("result1", { data: scrapedData }, (err, html) => {
+        if (err) reject(err);
+        else resolve(html);
+      });
     });
 
     res.render("result", {
       data: {
+        ...scrapedData,
         renderedHTML,
-        movieName,
-        reviewerName,
-        review,
-        movieYear,
-        rating,
-        watchedDate,
-        likes,
-        hasSpoiler,
-        posterBetterSrc,
-        reviewerPicBetterSrc,
       },
     });
+
     await browser.close();
   } catch (err) {
     console.error(err);
