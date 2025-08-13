@@ -78,11 +78,13 @@ app.post("/result", async (req, res) => {
 
     const reviewerName = await getTextContent(page, `span[itemprop='name']`);
 
-    const movieName = await getTextContent(page, `span.film-title-wrapper>a`);
+    const movieName = await getTextContent(page, `h2.name.-primary.prettify>a`);
+    // const movieName = await getTextContent(page, `span.film-title-wrapper>a`);
 
     const movieYear = await getTextContent(
       page,
-      `span.film-title-wrapper>small>a`
+      `span.releasedate>a`
+      // `span.film-title-wrapper>small>a`
     );
 
     const rating = await getTextContent(page, `span.rating.rating-large`);
@@ -96,10 +98,14 @@ app.post("/result", async (req, res) => {
     console.log(typeof likes);
     console.log(`Likes: a${likes}a`);
 
-    const posterSrc = await page.evaluate((movieName) => {
-      let imgElement = document.querySelector(`img[alt="${movieName}"]`);
-      return imgElement ? imgElement.src.trim() : null;
-    }, movieName);
+    // Replace the existing posterSrc code with:
+    const posterSrc = await page.evaluate(() => {
+      // Use the same selector we already confirmed exists
+      const img = document.querySelector(
+        'img[width="150"][height="225"][src^="https://a.ltrbxd.com/resized"]'
+      );
+      return img ? img.src.trim() : null;
+    });
 
     const reviewerPicSrc = await page.evaluate((reviewerName) => {
       let imgElement = document.querySelector(`img[alt="${reviewerName}"]`);
@@ -109,11 +115,26 @@ app.post("/result", async (req, res) => {
 
     let newDimensions = "-0-1000-0-1500-";
     let replacedUrl = posterSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
-    let posterBetterSrc = replacedUrl;
+    // Handle potential null values for images
+    let posterBetterSrc = posterSrc;
+    let reviewerPicBetterSrc = reviewerPicSrc;
 
-    newDimensions = "-0-1000-0-1000-";
-    replacedUrl = reviewerPicSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
-    let reviewerPicBetterSrc = replacedUrl;
+    if (posterSrc) {
+      const newDimensions = "-0-1000-0-1500-";
+      posterBetterSrc = posterSrc.replace(/-0-(\d+)-0-(\d+)-/, newDimensions);
+    }
+
+    if (reviewerPicSrc) {
+      const newDimensions = "-0-1000-0-1000-";
+      reviewerPicBetterSrc = reviewerPicSrc.replace(
+        /-0-(\d+)-0-(\d+)-/,
+        newDimensions
+      );
+    }
+
+    // If the values (movieName, reviewerName, review, movieYear, rating, watchedDate, likes, hasSpoiler, posterBetterSrc, reviewerPicBetterSrc) are null, we will use gemini ai. send the webpage and ask the AI to return me those values
+
+
 
     const renderedHTML = await new Promise((resolve, reject) => {
       res.render(
