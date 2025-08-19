@@ -10,6 +10,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
 
 // Initialize Gemini AI -- THIS IS NEW
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -81,8 +82,7 @@ app.post("/result", async (req, res) => {
           page,
           `div.review div > p.prior-review-link ~ div`
         )),
-      reviewerName: await getTextContent(page, `span#msm`),
-      // reviewerName: await getTextContent(page, `span[itemprop='name']`),
+      reviewerName: await getTextContent(page, `span[itemprop='name']`),
       movieName: await getTextContent(page, `h2.name.-primary.prettify>a`),
       movieYear: await getTextContent(page, `span.releasedate>a`),
       rating: await getTextContent(page, `span.rating.rating-large`),
@@ -163,7 +163,8 @@ app.post("/result", async (req, res) => {
         const text = response.text();
 
         // 4. Parse the JSON response from the AI
-        const aiData = JSON.parse(text);
+        const cleanedText = text.replace('```json\n', '').replace('```', '');
+        const aiData = JSON.parse(cleanedText);
         console.log("Gemini responded with:", aiData);
 
         // 5. Merge the AI's data with our scraped data
@@ -275,6 +276,6 @@ app.post("/download", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Server is running on http://${HOST}:${PORT}`);
 });
